@@ -66,7 +66,7 @@ float  minHum = 80;
 float  maxCO2 = 1500;
 float  minCO2 = 800;
 
-// Min Max Werte anpassen
+// Min Max Werte anpassen für gelben Button
 int minMaxSetter = 0;
 
 // LED Pins (optional)
@@ -79,9 +79,9 @@ const int PIN_BUTTONR = 26;
 const int PIN_BUTTONGE = 19;
 
 // Ist der Button gedrückt worden
-bool bGreen = true;
-bool bRed = true;
-bool bYellow = true;
+bool greenButtonPressed = true;
+bool redButtonPressed = true;
+bool yellowButtonPressed = true;
 
 
 // MH-Z19 CO₂ Sensor
@@ -284,51 +284,51 @@ void handleData() {
 
 void readButtons()
 {
-   if (bGreen && digitalRead(PIN_BUTTONGR) == LOW )
+   if (greenButtonPressed && digitalRead(PIN_BUTTONGR) == LOW )
   {
     if(tab == 2)
     {
       tab = 0;
-      bGreen = false;
+      greenButtonPressed = false;
     }
     else
     {
       tab += 1;
-      bGreen = false;
+      greenButtonPressed = false;
     }
    
   }
-  if (bRed && digitalRead(PIN_BUTTONR) == LOW )
+  if (redButtonPressed && digitalRead(PIN_BUTTONR) == LOW )
   {
     if(tab == -3)
     {
       tab = 0;
-      bRed = false;
+      redButtonPressed = false;
     }
     else
     {
       tab -= 1;
-      bRed = false;
+      redButtonPressed = false;
     }
   }
-  if (bYellow && digitalRead(PIN_BUTTONGE) == LOW )
+  if (yellowButtonPressed && digitalRead(PIN_BUTTONGE) == LOW )
   {
     minMaxSetter += 1;
-    bYellow = false;
+    yellowButtonPressed = false;
   }
 
 
   if (digitalRead(PIN_BUTTONGR) == HIGH )
   {
-    bGreen = true;
+    greenButtonPressed = true;
   }
   if (digitalRead(PIN_BUTTONR) == HIGH )
   {
-    bRed = true;
+    redButtonPressed = true;
   }
   if (digitalRead(PIN_BUTTONGE) == HIGH )
   {
-    bYellow = true;
+    yellowButtonPressed = true;
   }
 }
 

@@ -5,7 +5,6 @@
  * Datum:   26.11.2025
  */
 
-
 // Bibliotheken einbinden
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -14,12 +13,8 @@
 #include "RTClib.h"
 #include <DHT.h>
 #include <MHZ19.h>
-#include <HardwareSerial.h>
-#include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
-#include <HTTPClient.h>
-#include <WiFiClientSecure.h>
 #include <WebServer.h>
 
 // OLED SSD1306 Parameter
@@ -39,39 +34,27 @@
 const int DHT_PIN = 27;
 #define DHTTYPE DHT22
 DHT dht(DHT_PIN, DHTTYPE);
-
-const char* topic = "api/data";
  
 // FreeRTOS Tasks
 TaskHandle_t TaskWLAN_OLED;
 TaskHandle_t TaskSensor;
 
-// WLAN/MQTT
+// WLAN
 const char* ssid = "OvM-Raspi";
 const char* password = "abcD1234";
-const char* url = "https://www.heise.de/";
-
-const char* mqtt_server = "fa7604796f27494dbdfb0104438c6df0.s1.eu.hivemq.cloud";
-const int mqtt_port = 8883;
-const char* mqtt_user = "MushroomHelper";
-const char* mqtt_pass = "mushrooM1";
-const char* topic = "api/data";
 
 // Webserver auf Port 80
 WebServer server(80);
 
-WiFiClientSecure espClient;
-PubSubClient client(espClient);
-
-
+// Sensor Variabeln
 float temp;
 float hum;
 float co2;
 
-
+// Welche Werte angezeigt werden
 int tab = 0;
 
-
+// Sensor Variabeln werte Bereiche
 float  maxTemp = 24;
 float  minTemp = 10;
 
@@ -83,8 +66,9 @@ float  minHum = 80;
 float  maxCO2 = 1500;
 float  minCO2 = 800;
 
-
+// Min Max Werte anpassen
 int minMaxSetter = 0;
+
 // LED Pins (optional)
 int ledPins[10] = {0, 2, 18, 25};
 
@@ -94,7 +78,7 @@ const int PIN_BUTTONGR = 23;
 const int PIN_BUTTONR = 26;
 const int PIN_BUTTONGE = 19;
 
-
+// Ist der Button gedrückt worden
 bool bGreen = true;
 bool bRed = true;
 bool bYellow = true;
@@ -110,10 +94,7 @@ LiquidCrystal_I2C lcd(I2C_ADDR, LCD_COLUMNS, LCD_LINES);
 Adafruit_SSD1306 oled(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 RTC_DS1307 rtc;
 
-
 void setup() {
-
-
   Serial.begin(115200);
   while (!Serial) {
     // Warten auf die Verbindung zum seriellen Port
@@ -126,10 +107,12 @@ void setup() {
     display.display();
   }
  
-  // 5. Server starten
-  server.on("/", handleRoot);    // Das Dashboard
-  server.on("/data", handleData); // Die API
+  // Webserver-Routen
+  server.on("/", handleRoot);     // HTML Dashboard
+  server.on("/data", handleData); // JSON API
+
   server.begin();
+  Serial.println("Webserver gestartet!");
 
   Serial.println("\nVerbindung hergestellt!");
   Serial.print("IP-Adresse: ");
@@ -140,8 +123,7 @@ void setup() {
   pinMode(PIN_BUTTONR, INPUT_PULLUP);
   pinMode(PIN_BUTTONGE, INPUT_PULLUP);
 
-
-  //Serial.begin(9600); // USB Serial Monitor
+  // Starte CO2 Sensor
   dht.begin();
 
 
@@ -167,13 +149,7 @@ void setup() {
     digitalWrite(ledPins[i], HIGH);
   }
 
-
-  //broker
-  espClient.setInsecure();
- 
-  client.setServer(mqtt_server, mqtt_port);
-
-  // Task für WLAN + OLED auf Core 0
+  // Task für Webserver + OLED + Knöpfe auf Core 0
   xTaskCreatePinnedToCore(
     TaskWLANOLEDcode,
     "TaskWLANOLED",
@@ -194,28 +170,21 @@ void setup() {
     1);
 }
 
-// --- Task WLAN + OLED ---
+// Task Webserver + OLED + Led + Knöpfe
 void TaskWLANOLEDcode(void * pvParameters) {
   for(;;) {
-    // WLAN prüfen
-    wLan();
-
-    // MQTT loop
-    if (!client.connected()) {
-      mqttconnect();
-    }
-    client.loop();
-    // Buttons pressed
+    // Knöpfe gedrückt
     readButtons();
     // OLED aktualisieren
     SetDisplay();
     // Leds aktualisieren
     ledDisplay();
-    vTaskDelay(100 / portTICK_PERIOD_MS); // alle 0.1 Sekunden
+    // Webserver bedienen
+    server.handleClient();
   }
 }
 
-// --- Task Sensoren ---
+// Task Sensoren ablesen
 void TaskSensorcode(void * pvParameters) {
   for(;;) {
     temp = dht.readTemperature();
@@ -225,45 +194,93 @@ void TaskSensorcode(void * pvParameters) {
     Serial.print("Temp: "); Serial.println(temp);
     Serial.print("Hum: ");  Serial.println(hum);
     Serial.print("CO2: ");  Serial.println(co2);
-
-    // JSON für MQTT erstellen
-    StaticJsonDocument<200> doc;
-    doc["temperature"] = temp;
-    doc["humidity"]    = hum;
-    doc["co2"]         = co2;
-    doc["Enviroment Status"] = showLedByPercentage((calcPercentage(co2, minCO2, maxCO2) + calcPercentage(hum, minHum, maxHum) + calcPercentage(temp, minTemp, maxTemp))/3);
-
-    char buffer[256];
-    serializeJson(doc, buffer);
-
-    // Publish
-    if (client.connected()) {
-      client.publish(topic, buffer);
-      Serial.println("MQTT Daten gesendet: ");
-      Serial.println(buffer);
-    }
-
+   
     vTaskDelay(2000 / portTICK_PERIOD_MS); // alle 2 Sekunden
   }
 }
 
+// Nicht benötigt wird durch die Tasks auf 2 Threads aufgeteilt
 void loop()
 {
 
 }
 
-void wLan() {
-  HTTPClient http;
-  http.begin(url);
-  int httpCode = http.GET();
-  if (httpCode > 0) {
-    Serial.printf("HTTP-GET an %s, Code: %d\n", url, httpCode);
-  } else {
-    Serial.printf("HTTP-GET fehlgeschlagen: %s\n", http.errorToString(httpCode).c_str());
-  }
-  http.end();
+// HTML Dashboard
+void handleRoot() {
+  String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>ESP32 Dashboard</title>";
+  html += "<style>";
+  html += "body { font-family: Arial; background:#f4f4f4; color:#333; text-align:center; }";
+  html += ".card { background:#fff; padding:20px; margin:20px auto; width:300px; box-shadow:0 0 10px rgba(0,0,0,0.1); }";
+  html += ".bar { height:20px; text-align:right; color:white; padding-right:5px; }";
+  html += "</style>";
+  html += "<script>setTimeout(()=>{location.reload();},2000);</script>"; // Auto-Refresh alle 2 Sekunden
+  html += "</head><body>";
+  html += "<h1>Umwelt-Dashboard</h1>";
+
+  // Temperatur
+  float tempPercent = calcPercentage(temp, minTemp, maxTemp);
+  String tempColor = (tempPercent >= 75) ? "#4CAF50" : (tempPercent >= 50 ? "#FFC107" : "#F44336");
+  html += "<div class='card'><h2>Temperatur</h2>";
+  html += "<p>" + String(temp) + " °C</p>";
+  html += "<div class='bar' style='width:" + String(tempPercent) + "%;background:" + tempColor + "'>" + String((int)tempPercent) + "%</div></div>";
+
+  // Luftfeuchtigkeit
+  float humPercent = calcPercentage(hum, minHum, maxHum);
+  String humColor = (humPercent >= 75) ? "#4CAF50" : (humPercent >= 50 ? "#FFC107" : "#F44336");
+  html += "<div class='card'><h2>Luftfeuchtigkeit</h2>";
+  html += "<p>" + String(hum) + " %</p>";
+  html += "<div class='bar' style='width:" + String(humPercent) + "%;background:" + humColor + "'>" + String((int)humPercent) + "%</div></div>";
+
+  // CO₂
+  float co2Percent = calcPercentage(co2, minCO2, maxCO2);
+  String co2Color = (co2Percent >= 75) ? "#4CAF50" : (co2Percent >= 50 ? "#FFC107" : "#F44336");
+  html += "<div class='card'><h2>CO₂</h2>";
+  html += "<p>" + String(co2) + " ppm</p>";
+  html += "<div class='bar' style='width:" + String(co2Percent) + "%;background:" + co2Color + "'>" + String((int)co2Percent) + "%</div></div>";
+
+  // Gesamtstatus
+  float avgPercent = (tempPercent + humPercent + co2Percent) / 3.0;
+  String avgColor = (avgPercent >= 75) ? "#4CAF50" : (avgPercent >= 50 ? "#FFC107" : "#F44336");
+  html += "<div class='card'><h2>Gesamtstatus</h2>";
+  html += "<p>Durchschnitt aller Werte</p>";
+  html += "<div class='bar' style='width:" + String(avgPercent) + "%;background:" + avgColor + "'>" + String((int)avgPercent) + "%</div></div>";
+
+  html += "</body></html>";
+  server.send(200, "text/html", html);
 }
 
+// Json Data
+void handleData() {
+  // Einzelwerte berechnen
+  float tempPercent = calcPercentage(temp, minTemp, maxTemp);
+  float humPercent  = calcPercentage(hum, minHum, maxHum);
+  float co2Percent  = calcPercentage(co2, minCO2, maxCO2);
+
+  // Durchschnitt
+  float avgPercent = (tempPercent + humPercent + co2Percent) / 3.0;
+
+  // Farbe bestimmen
+  String statusColor;
+  if (avgPercent >= 75) {
+    statusColor = "green";
+  } else if (avgPercent >= 50) {
+    statusColor = "yellow";
+  } else {
+    statusColor = "red";
+  }
+
+  // JSON erstellen
+  StaticJsonDocument<300> doc;
+  doc["temperature"] = temp;
+  doc["humidity"]    = hum;
+  doc["co2"]         = co2;
+  doc["statusPercent"] = avgPercent;
+  doc["statusColor"]   = statusColor;
+
+  String json;
+  serializeJson(doc, json);
+  server.send(200, "application/json", json);
+}
 
 void readButtons()
 {
@@ -464,18 +481,6 @@ void SetDisplay()
   oled.print("CO2: " + String(co2) + " ppm");
   oled.display();
   break;
-  }
-}
-  void mqttconnect() {
-  while (!client.connected()) {
-    Serial.print("Verbinde mit MQTT...");
-    if (client.connect("WemosD1R32", mqtt_user, mqtt_pass)) {
-      Serial.println("MQTT verbunden");
-    } else {
-      Serial.print("Fehler, rc=");
-      Serial.print(client.state());
-      delay(2000);
-    }
   }
 }
 

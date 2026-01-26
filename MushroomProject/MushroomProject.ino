@@ -35,7 +35,7 @@ const int DHT_PIN = 27;
 #define DHTTYPE DHT22
 DHT dht(DHT_PIN, DHTTYPE);
  
-// FreeRTOS Tasks
+// FreeRTOS Tasks für Cores
 TaskHandle_t TaskWLAN_OLED;
 TaskHandle_t TaskSensor;
 
@@ -89,7 +89,7 @@ MHZ19 mhz19;
 HardwareSerial mySerial(2); // UART2 für MH-Z19
 
 
-// Objekte
+// Objekte oled
 LiquidCrystal_I2C lcd(I2C_ADDR, LCD_COLUMNS, LCD_LINES);
 Adafruit_SSD1306 oled(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 RTC_DS1307 rtc;
@@ -144,7 +144,7 @@ void setup() {
 
 
   // LED Pins als Ausgang
-  for (int i = 0; i <= 9; i++) {
+  for (int i = 0; i <= 3; i++) {
     pinMode(ledPins[i], OUTPUT);
     digitalWrite(ledPins[i], HIGH);
   }
@@ -184,7 +184,7 @@ void TaskWLANOLEDcode(void * pvParameters) {
   }
 }
 
-// Task Sensoren ablesen
+// Task Sensoren ablesen und aktualisieren
 void TaskSensorcode(void * pvParameters) {
   for(;;) {
     temp = dht.readTemperature();
@@ -215,7 +215,7 @@ void handleRoot() {
   html += "</style>";
   html += "<script>setTimeout(()=>{location.reload();},2000);</script>"; // Auto-Refresh alle 2 Sekunden
   html += "</head><body>";
-  html += "<h1>Umwelt-Dashboard</h1>";
+  html += "<h1>Mushroom-Climate-Dashboard</h1>";
 
   // Temperatur
   float tempPercent = calcPercentage(temp, minTemp, maxTemp);
@@ -282,8 +282,10 @@ void handleData() {
   server.send(200, "application/json", json);
 }
 
+// Wertet Knopfdrücke aus
 void readButtons()
 {
+  // Tab case nach ->
    if (greenButtonPressed && digitalRead(PIN_BUTTONGR) == LOW )
   {
     if(tab == 2)
@@ -298,6 +300,8 @@ void readButtons()
     }
    
   }
+
+  // Tab case nach <-
   if (redButtonPressed && digitalRead(PIN_BUTTONR) == LOW )
   {
     if(tab == -3)
@@ -311,13 +315,14 @@ void readButtons()
       redButtonPressed = false;
     }
   }
+  
   if (yellowButtonPressed && digitalRead(PIN_BUTTONGE) == LOW )
   {
     minMaxSetter += 1;
     yellowButtonPressed = false;
   }
 
-
+  // wenn der Button gedrückt gehalten wird, damit kein doppelter Input gelesen wird, werden Buttons erst nach stopp des drückens wieder verfügbar
   if (digitalRead(PIN_BUTTONGR) == HIGH )
   {
     greenButtonPressed = true;
@@ -332,7 +337,7 @@ void readButtons()
   }
 }
 
-
+// updated je nach case tab die LED Bar nach Güte der Werte 
 void ledDisplay()
 {
   switch(tab){
@@ -353,6 +358,7 @@ void ledDisplay()
   }
 }
 
+// schaltet je nach Prozent Wert die LEDs der LED Bar an und aus 
 void showLedByPercentage(float percent) {
   // Alle LEDs erstmal ausschalten
   for (int i = 0; i < 4; i++) {
@@ -381,22 +387,25 @@ void showLedByPercentage(float percent) {
   }
 }
 
+// berechnet die prozentuale Abweichung des gemessenden Values zu den minimalen und maximalen Wert
 float calcPercentage(float value, float minVal, float maxVal) {
   if (value >= minVal && value <= maxVal) {
-    return 100.0; // innerhalb des Bereichs
+    return 100.0; // innerhalb des Min Max Bereichs
   } else if (value < minVal) {
-    return (value / minVal) * 100.0; // unterhalb
+    return (value / minVal) * 100.0; // unterhalb des Minwertes
   } else { // value > maxVal
-    return (maxVal / value) * 100.0; // oberhalb
+    return (maxVal / value) * 100.0; // oberhalb des Maxwertes
   }
 }
+
+// Updated das OLED Display nach Tab Case und den aktuellen gemessenden Werten
 void SetDisplay()
 {
   oled.setTextSize(1);
   oled.setTextColor(SSD1306_WHITE);
  switch(tab){
   case (1):
-  // case 1
+  // case 1 Temperatur Werte mit Min und Max
   Serial.println("Temp 1");
   oled.clearDisplay();
   oled.setCursor(0, 0);
@@ -408,7 +417,7 @@ void SetDisplay()
   oled.display();
   break;
   case (2):
-  // case 2
+  // case 2 Luftfeuchtigkeit Werte mit Min und Max
   Serial.println("Hum 2");
   oled.clearDisplay();
   oled.setCursor(0, 0);
@@ -420,7 +429,7 @@ void SetDisplay()
   oled.display();
   break;
     case (3):
-  // case 3
+  // case 3 CO2 Werte mit Min und Max
   Serial.println("Co2 3");
   oled.clearDisplay();
   oled.setCursor(0, 0);
@@ -433,7 +442,7 @@ void SetDisplay()
 
 
   case (-1):
-  // case 1
+  // case -1 Temperatur Werte mit Min und Max
   Serial.println("Temp 1");
   oled.clearDisplay();
   oled.setCursor(0, 0);
@@ -445,7 +454,7 @@ void SetDisplay()
   oled.display();
   break;
   case (-2):
-  // case 2
+  // case -2 Luftfeuchtigkeit Werte mit Min und Max
   Serial.println("Hum 2");
   oled.clearDisplay();
   oled.setCursor(0, 0);
@@ -457,7 +466,7 @@ void SetDisplay()
   oled.display();
   break;
     case (-3):
-  // case 3
+  // case -3 CO2 Werte mit Min und Max
   Serial.println("Co2 3");
   oled.clearDisplay();
   oled.setCursor(0, 0);
@@ -469,7 +478,7 @@ void SetDisplay()
   oled.display();
   default:
   Serial.println("Overview");
-  // OLED Anzeige
+  // OLED Anzeige Alle Sensor Werte im Überblick
   oled.clearDisplay();
   oled.setCursor(0, 0);
   oled.setTextSize(1);

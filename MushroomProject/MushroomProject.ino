@@ -42,6 +42,7 @@ TaskHandle_t TaskSensor;
 // WLAN
 const char* ssid = "OvM-Raspi";
 const char* password = "abcD1234";
+IPAddress ipAddress;
 
 // Webserver auf Port 80
 WebServer server(80);
@@ -74,9 +75,9 @@ int ledPins[10] = {0, 2, 18, 25};
 
 
 // Button PINs
-const int PIN_BUTTONGR = 23;
+const int PIN_BUTTONGR = 19;
 const int PIN_BUTTONR = 26;
-const int PIN_BUTTONGE = 19;
+const int PIN_BUTTONGE = 23;
 
 // Ist der Button gedrückt worden
 bool greenButtonPressed = true;
@@ -102,9 +103,7 @@ void setup() {
   // Mit dem WLAN verbinden
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    display.print(".");
-    display.display();
+    delay(500);  
   }
  
   // Webserver-Routen
@@ -117,6 +116,7 @@ void setup() {
   Serial.println("\nVerbindung hergestellt!");
   Serial.print("IP-Adresse: ");
   Serial.println(WiFi.localIP());
+  ipAddress = WiFi.localIP();
 
   //Buttons
   pinMode(PIN_BUTTONGR, INPUT_PULLUP);
@@ -125,7 +125,6 @@ void setup() {
 
   // Starte CO2 Sensor
   dht.begin();
-
 
   // UART für MH-Z19: RX=16, TX=17 (freie Pins am ESP32)
   mySerial.begin(9600, SERIAL_8N1, 16, 17);
@@ -288,7 +287,7 @@ void readButtons()
   // Tab case nach ->
    if (greenButtonPressed && digitalRead(PIN_BUTTONGR) == LOW )
   {
-    if(tab == 2)
+    if(tab == 3)
     {
       tab = 0;
       greenButtonPressed = false;
@@ -439,7 +438,7 @@ void SetDisplay()
   oled.setCursor(0, 20);
   oled.print("Min CO2: " + String(minCO2) + " ppm");
   oled.display();
-
+  break;
 
   case (-1):
   // case -1 Temperatur Werte mit Min und Max
@@ -476,6 +475,7 @@ void SetDisplay()
   oled.setCursor(0, 20);
   oled.print("Min CO2: " + String(minCO2) + " ppm");
   oled.display();
+  break;
   default:
   Serial.println("Overview");
   // OLED Anzeige Alle Sensor Werte im Überblick
@@ -488,6 +488,8 @@ void SetDisplay()
   oled.print("Humidity: " + String(hum) + " %");
   oled.setCursor(0, 20);
   oled.print("CO2: " + String(co2) + " ppm");
+  oled.setCursor(0, 40);
+  oled.print(ipAddress);
   oled.display();
   break;
   }
